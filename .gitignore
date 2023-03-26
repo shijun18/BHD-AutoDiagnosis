@@ -14,6 +14,7 @@ rename.py
 *.ipynb
 remove.py
 *.csv
+*_*.txt
 *.json
 # C extensions
 *.so
