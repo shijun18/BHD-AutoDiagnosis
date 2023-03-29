@@ -6,8 +6,8 @@ CSV_PATH = './converter/csv_file/BHD_crop_training.csv'
 TEST_CSV_PATH = './converter/csv_file/BHD_crop_test.csv'
 
 NET_NAME = 'r3d_18'
-VERSION = 'v1.0'
-DEVICE = '1'
+VERSION = 'v1.0-x3'
+DEVICE = '3'
 # Must be True when pre-training and inference
 PRE_TRAINED = False 
 # 1,2,3,4,5
@@ -36,7 +36,7 @@ INIT_TRAINER = {
     'crop':0,
     'scale':(-1600,0),
     'use_roi':False or 'roi' in VERSION,
-    'batch_size':2,
+    'batch_size':4,
     'num_workers':4,
     'device':DEVICE,
     'pre_trained':PRE_TRAINED,
@@ -46,7 +46,8 @@ INIT_TRAINER = {
     'gamma': 0.1,
     'milestones': [30,60,90],
     'T_max':5,
-    'use_fp16':True
+    'use_fp16':True,
+    'use_maxpool': False or 'maxpool' in VERSION
  }
 
 # Arguments when perform the trainer 
@@ -56,6 +57,7 @@ SETUP_TRAINER = {
     'optimizer':'AdamW',
     'loss_fun':'Cross_Entropy',
     'class_weight':None,
-    'lr_scheduler':'MultiStepLR' # MultiStepLR
+    'lr_scheduler':'CosineAnnealingLR', # MultiStepLR
+    'repeat_factor':3.0,
 }
 

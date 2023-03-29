@@ -14,6 +14,7 @@ def modify_file_name(input_dir):
         'after':[]
     }
     for subdir in os.scandir(input_dir):
+    # if subdir.name == 'CT3':
         item_list = [case.path for case in os.scandir(subdir.path)]
         # print(item_list)
         for index, item in tqdm(enumerate(item_list)):
@@ -64,9 +65,10 @@ def dcm_to_nii(input_dir,save_dir):
     dcm_path = []
     nii_path = []
     for subdir in os.scandir(input_dir):
-        for item in os.scandir(subdir.path):
-            dcm_path.append(item.path)
-            nii_path.append(os.path.join(save_dir,f'{item.name}.nii.gz'))
+        if subdir.name == 'CT3':
+            for item in os.scandir(subdir.path):
+                dcm_path.append(item.path)
+                nii_path.append(os.path.join(save_dir,f'{item.name}.nii.gz'))
     error_data =[]
     for dcm_path, nii_path in tqdm(zip(dcm_path,nii_path)):
         # print(dcm_path,nii_path)
@@ -109,17 +111,20 @@ if __name__ == "__main__":
     # input_dir = '../dataset/raw_data/dcm_file/non-BHD'
     # modify_file_name(input_dir)
 
-    ## step 2: convert dcm series to nii for data desensitization
     # input_dir = '../dataset/raw_data/dcm_file/BHD'
-    # save_dir = '../dataset/raw_data/nii_file/BHD'
+    # modify_file_name(input_dir)
+
+    ## step 2: convert dcm series to nii for data desensitization
+    input_dir = '../dataset/raw_data/dcm_file/BHD'
+    save_dir = '../dataset/raw_data/nii_file/BHD-miss'
     # input_dir = '../dataset/raw_data/dcm_file/non-BHD'
     # save_dir = '../dataset/raw_data/nii_file/non-BHD'
 
-    # dcm_to_nii(input_dir,save_dir)
+    dcm_to_nii(input_dir,save_dir)
 
     ## step 3: get the attrs of nii data
-    input_dir = '../dataset/raw_data/nii_file/BHD'
+    # input_dir = '../dataset/raw_data/nii_file/BHD'
     # input_dir = '../dataset/raw_data/nii_file/non-BHD'
-    save_csv = './data_attr.csv'
+    # save_csv = './data_attr.csv'
 
-    get_data_attr(input_dir,save_csv)
+    # get_data_attr(input_dir,save_csv)

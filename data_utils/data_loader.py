@@ -18,20 +18,23 @@ class DataGenerator(Dataset):
     - label_dict: dict, file path as key, label as value
     - transform: the data augmentation methods
     '''
-    def __init__(self, path_list, label_dict, transform=None, use_roi=False):
+    def __init__(self, path_list, label_dict, transform=None, use_roi=False, repeat_factor=1.0):
 
         self.path_list = path_list
         self.label_dict = label_dict
         self.transform = transform
         self.use_roi = use_roi
+        self.repeat_factor = repeat_factor
 
     def __len__(self):
-        return len(self.path_list)
+        # return len(self.path_list)
+        return int(len(self.path_list)*self.repeat_factor)
 
     def __getitem__(self, index):
         # Get image and label
         # image: D,H,W
         # label: integer, 0,1,..
+        index = index % len(self.path_list)
         image = hdf5_reader(self.path_list[index], 'image')
         if self.use_roi:
             mask = hdf5_reader(self.path_list[index], 'mask')

@@ -65,7 +65,8 @@ class VolumeClassifier(object):
                  gamma=0.1,
                  milestones=[40, 80],
                  T_max=5,
-                 use_fp16=True):
+                 use_fp16=True,
+                 use_maxpool=False):
         super(VolumeClassifier, self).__init__()
 
         self.net_name = net_name
@@ -98,6 +99,7 @@ class VolumeClassifier(object):
         self.milestones = milestones
         self.T_max = T_max
         self.use_fp16 = use_fp16
+        self.use_maxpool = use_maxpool
 
         os.environ['CUDA_VISIBLE_DEVICES'] = self.device
 
@@ -116,7 +118,8 @@ class VolumeClassifier(object):
                 loss_fun='Cross_Entropy',
                 class_weight=None,
                 lr_scheduler=None,
-                cur_fold=0):
+                cur_fold=0,
+                repeat_factor=1.0):
 
         torch.manual_seed(0)
         np.random.seed(0)
@@ -166,7 +169,8 @@ class VolumeClassifier(object):
         train_dataset = DataGenerator(train_path,
                                       label_dict,
                                       transform=train_transformer,
-                                      use_roi=self.use_roi)
+                                      use_roi=self.use_roi,
+                                      repeat_factor=repeat_factor)
 
         train_loader = DataLoader(train_dataset,
                                   batch_size=self.batch_size,
@@ -313,8 +317,8 @@ class VolumeClassifier(object):
         val_transformer = transforms.Compose([
             tr.Trunc_and_Normalize(self.scale),
             tr.CropResize(dim=self.input_shape, crop=self.crop),
-            tr.RandomTranslationRotationZoom(mode='trz'),
-            tr.RandomFlip(mode='hv'),
+            # tr.RandomTranslationRotationZoom(mode='trz'),
+            # tr.RandomFlip(mode='hv'),
             tr.To_Tensor()
         ])
 
@@ -464,7 +468,7 @@ class VolumeClassifier(object):
                num_classes=self.num_classes
            )
         
-        if 'maxpool' in net_name:
+        if self.use_maxpool:
             net.pool = nn.AdaptiveMaxPool3d((1,1,1))
 
         return net

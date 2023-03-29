@@ -1,7 +1,13 @@
 import shutil
 import os
 import pandas as pd
+import h5py
 
+
+def save_as_hdf5(data, save_path, key):
+    hdf5_file = h5py.File(save_path, 'a')
+    hdf5_file.create_dataset(key, data=data)
+    hdf5_file.close()
 
 def csv_reader_single(csv_file,key_col=None,value_col=None):
   '''
