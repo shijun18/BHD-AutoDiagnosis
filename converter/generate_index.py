@@ -36,9 +36,9 @@ def merge_csv(csv_list,save_path):
 
 if __name__ == "__main__":
 
-    # input_path = os.path.abspath('../dataset/raw_data/resized_hdf5_file')
-    input_path = os.path.abspath('../dataset/raw_data/crop_resized_hdf5_file')
+    input_path = os.path.abspath('../dataset/raw_data/resized_hdf5_file')
+    # input_path = os.path.abspath('../dataset/raw_data/crop_resized_hdf5_file')
     # print(input_path)
-    # csv_path = './csv_file/BHD_training.csv'
-    csv_path = './csv_file/BHD_crop_training.csv'
+    csv_path = './csv_file/BHD_training_v2.csv'
+    # csv_path = './csv_file/BHD_crop_training_v2.csv'
     make_label_csv(input_path,csv_path)

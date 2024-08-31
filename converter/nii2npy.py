@@ -1,18 +1,15 @@
 import os
 import h5py
+import PIL
 import SimpleITK as sitk
 import shutil
 from tqdm import tqdm
 import numpy as np
-import copy
 
 import nibabel as nib
 from scipy.ndimage import zoom
 from skimage.transform import resize
-import cv2
-from skimage.exposure.exposure import rescale_intensity
-from skimage.draw import polygon
-from skimage import measure
+
 from scipy.ndimage import binary_fill_holes, binary_erosion, binary_dilation, label
 
 def save_as_hdf5(data, save_path, key):
@@ -101,9 +98,9 @@ def resample_nii(input_dir,save_dir,new_spacing=[1,1,1]):
 
 
 def nii2npy(input_dir,save_dir,do_resize=False,do_crop=False,target_size=(256,256,256)):
-    if os.path.exists(save_dir):
-        shutil.rmtree(save_dir)
-    os.makedirs(save_dir)
+    # if os.path.exists(save_dir):
+    #     shutil.rmtree(save_dir)
+    # os.makedirs(save_dir)
 
     sample_path = [case.path for case in os.scandir(input_dir)]
 
@@ -126,22 +123,22 @@ def nii2npy(input_dir,save_dir,do_resize=False,do_crop=False,target_size=(256,25
 if __name__ == "__main__":
 
     ## step1:  resample the data to standard pixel spacing of [1.,1.,1.]
-    # input_dir = '../dataset/raw_data/nii_file/BHD'
-    # save_dir = '../dataset/raw_data/resampled_nii_file/BHD'
+    # input_dir = '../dataset/raw_data/nii_file/BHD2'
+    # save_dir = '../dataset/raw_data/resampled_nii_file/BHD2'
     # resample_nii(input_dir,save_dir,[1.,1.,1.])
 
-    # input_dir = '../dataset/raw_data/nii_file/non-BHD'
-    # save_dir = '../dataset/raw_data/resampled_nii_file/non-BHD'
+    # input_dir = '../dataset/raw_data/nii_file/non-BHD2'
+    # save_dir = '../dataset/raw_data/resampled_nii_file/non-BHD2'
     # resample_nii(input_dir,save_dir,[1.,1.,1.])
 
     ## step2:  convert nii data to hdf5 format
-    # input_dir = '../dataset/raw_data/resampled_nii_file/BHD'
-    # save_dir = '../dataset/raw_data/resized_hdf5_file/BHD'
+    # input_dir = '../dataset/raw_data/resampled_nii_file/BHD2'
+    # save_dir = '../dataset/raw_data/resized_hdf5_file/BHD2'
     # nii2npy(input_dir,save_dir,do_resize=True,target_size=(256,256,256))
 
-    # input_dir = '../dataset/raw_data/resampled_nii_file/non-BHD'
-    # save_dir = '../dataset/raw_data/resized_hdf5_file/non-BHD'
-    # nii2npy(input_dir,save_dir,do_resize=True,target_size=(256,256,256))
+    input_dir = '../dataset/raw_data/resampled_nii_file/non-BHD'
+    save_dir = '../dataset/raw_data/resized_hdf5_file/non-BHD2'
+    nii2npy(input_dir,save_dir,do_resize=True,target_size=(256,256,256))
 
     input_dir = '../dataset/raw_data/resampled_nii_file/BHD'
     save_dir = '../dataset/raw_data/crop_resized_hdf5_file/BHD'

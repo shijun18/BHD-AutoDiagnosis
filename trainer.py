@@ -25,6 +25,7 @@ from data_utils.data_loader import DataGenerator
 from utils import dfs_remove_weight
 from torch.cuda.amp import autocast as autocast
 from torch.cuda.amp import GradScaler
+import setproctitle
 # GPU version.
 
 
@@ -42,7 +43,8 @@ class VolumeClassifier(object):
     - batch_size: integer
     - num_workers: integer, how many subprocesses to use for data loading.
     - device: string, use the specified device
-    - pre_trained: True or False, default False
+    - is_training: True or False, default True
+    - pretrained_weight_path: string, pretrained weight path
     - weight_path: weight path of pre-trained model
     '''
     def __init__(self,
@@ -58,7 +60,8 @@ class VolumeClassifier(object):
                  batch_size=6,
                  num_workers=0,
                  device=None,
-                 pre_trained=False,
+                 is_training=True,
+                 pretrained_weight_path=None,
                  weight_path=None,
                  weight_decay=0.,
                  momentum=0.95,
@@ -82,8 +85,8 @@ class VolumeClassifier(object):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.device = device
-
-        self.pre_trained = pre_trained
+        self.is_training = is_training
+        self.pretrained_weight_path = pretrained_weight_path
         self.weight_path = weight_path
         self.start_epoch = 0
         self.global_step = 0
@@ -105,8 +108,12 @@ class VolumeClassifier(object):
 
         self.net = self._get_net(self.net_name)
 
-        if self.pre_trained:
-            self._get_pre_trained(self.weight_path)
+        if self.is_training:
+            if self.pretrained_weight_path is not None:
+                self._load_pretrained_weight(self.pretrained_weight_path)
+            #TODO resume
+        else:
+            self._load_weight(self.weight_path)
 
     def trainer(self,
                 train_path,
@@ -133,14 +140,14 @@ class VolumeClassifier(object):
         output_dir = os.path.join(output_dir, f'fold{str(cur_fold)}')
 
         if os.path.exists(log_dir):
-            if not self.pre_trained:
+            if self.is_training:
                 shutil.rmtree(log_dir)
                 os.makedirs(log_dir)
         else:
             os.makedirs(log_dir)
 
         if os.path.exists(output_dir):
-            if not self.pre_trained:
+            if self.is_training:
                 shutil.rmtree(output_dir)
                 os.makedirs(output_dir)
         else:
@@ -186,10 +193,6 @@ class VolumeClassifier(object):
         optimizer = self._get_optimizer(optimizer, net, lr)
         scaler = GradScaler()
 
-        if self.pre_trained:
-            checkpoint = torch.load(self.weight_path)
-            optimizer.load_state_dict(checkpoint['optimizer'])
-
         if lr_scheduler is not None:
             lr_scheduler = self._get_lr_scheduler(lr_scheduler, optimizer)
 
@@ -200,6 +203,8 @@ class VolumeClassifier(object):
                                        op_type='max')
 
         for epoch in range(self.start_epoch, self.n_epoch):
+
+            setproctitle.setproctitle('{}: {}/{}'.format('Shi Jun', epoch, self.n_epoch))
 
             train_loss, train_acc = self._train_on_epoch(epoch, net, loss, optimizer, train_loader, scaler)
 
@@ -383,7 +388,7 @@ class VolumeClassifier(object):
             net = self.net
 
         if hook_fn_forward:
-            net.avgpool.register_forward_hook(self.hook_fn_forward)
+            net.pool.register_forward_hook(self.hook_fn_forward)
 
         net = net.cuda()
         net.eval()
@@ -482,23 +487,73 @@ class VolumeClassifier(object):
 
         return loss
 
+    # def _get_optimizer(self, optimizer, net, lr):
+    #     if optimizer == 'Adam':
+    #         optimizer = torch.optim.Adam(net.parameters(),
+    #                                      lr=lr,
+    #                                      weight_decay=self.weight_decay)
+
+    #     elif optimizer == 'SGD':
+    #         optimizer = torch.optim.SGD(net.parameters(),
+    #                                     lr=lr,
+    #                                     momentum=self.momentum)
+
+    #     elif optimizer == 'AdamW':
+    #         optimizer = torch.optim.AdamW(net.parameters(),
+    #                                      lr=lr,weight_decay=self.weight_decay)
+
+    #     return optimizer
+
     def _get_optimizer(self, optimizer, net, lr):
-        if optimizer == 'Adam':
-            optimizer = torch.optim.Adam(net.parameters(),
-                                         lr=lr,
-                                         weight_decay=self.weight_decay)
+        """
+        Build optimizer, set weight decay of normalization to 0 by default.
+        """
+        def check_keywords_in_name(name, keywords=()):
+            isin = False
+            for keyword in keywords:
+                if keyword in name:
+                    isin = True
+            return isin
 
-        elif optimizer == 'SGD':
-            optimizer = torch.optim.SGD(net.parameters(),
-                                        lr=lr,
-                                        momentum=self.momentum)
+        def set_weight_decay(model, skip_list=(), skip_keywords=()):
+            has_decay = []
+            no_decay = []
 
-        elif optimizer == 'AdamW':
-            optimizer = torch.optim.AdamW(net.parameters(),
-                                         lr=lr,weight_decay=self.weight_decay)
+            for name, param in model.named_parameters():
+                # check what will happen if we do not set no_weight_decay
+                if not param.requires_grad:
+                    continue  # frozen weights
+                if len(param.shape) == 1 or name.endswith(".bias") or (name in skip_list) or \
+                        check_keywords_in_name(name, skip_keywords):
+                    no_decay.append(param)
+                    # print(f"{name} has no weight decay")
+                else:
+                    has_decay.append(param)
+            return [{'params': has_decay},
+                    {'params': no_decay, 'weight_decay': 0.}]
+
+        skip = {}
+        skip_keywords = {}
+        if hasattr(net, 'no_weight_decay'):
+            skip = net.no_weight_decay()
+        if hasattr(net, 'no_weight_decay_keywords'):
+            skip_keywords = net.no_weight_decay_keywords()
+        parameters = set_weight_decay(net, skip, skip_keywords)
+
+        opt_lower = optimizer.lower()
+        optimizer = None
+        if opt_lower == 'sgd':
+            optimizer = torch.optim.SGD(parameters, momentum=self.momentum, nesterov=True,
+                                lr=lr, weight_decay=self.weight_decay)
+        elif opt_lower == 'adamw':
+            optimizer = torch.optim.AdamW(parameters, eps=1e-8, betas=(0.9, 0.999),
+                                    lr=lr, weight_decay=self.weight_decay)
+        elif opt_lower == 'adam':
+            optimizer = torch.optim.Adam(parameters, lr=lr, weight_decay=self.weight_decay)
 
         return optimizer
 
+    
     def _get_lr_scheduler(self, lr_scheduler, optimizer):
         if lr_scheduler == 'ReduceLROnPlateau':
             lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -508,17 +563,25 @@ class VolumeClassifier(object):
                 optimizer, self.milestones, gamma=self.gamma)
         elif lr_scheduler == 'CosineAnnealingLR':
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=self.T_max)
+                optimizer, T_max=self.n_epoch, eta_min=1e-6)
         elif lr_scheduler == 'CosineAnnealingWarmRestarts':
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
                 optimizer, 20, T_mult=2)
 
         return lr_scheduler
 
-    def _get_pre_trained(self, weight_path):
-        checkpoint = torch.load(weight_path)
-        self.net.load_state_dict(checkpoint['state_dict'])
-        self.start_epoch = checkpoint['epoch'] + 1
+    def _load_pretrained_weight(self, weight_path):
+        checkpoint = torch.load(weight_path,map_location='cpu')
+        del checkpoint['state_dict']['fc.weight']
+        del checkpoint['state_dict']['fc.bias']
+        msg=self.net.load_state_dict(checkpoint['state_dict'],strict=False)
+        print(msg)
+    
+    def _load_weight(self, weight_path):
+        checkpoint = torch.load(weight_path,map_location='cpu')
+        msg=self.net.load_state_dict(checkpoint['state_dict'])
+        print(msg)
+        # self.start_epoch = checkpoint['epoch'] + 1
 
 
 # computing tools

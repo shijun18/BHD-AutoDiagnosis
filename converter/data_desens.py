@@ -7,22 +7,24 @@ import nibabel as nib
 from tqdm import tqdm
 import numpy as np
 
-def modify_file_name(input_dir):
+def modify_file_name(input_dir,spe_subdir=None):
     
     modify_dict = {
         'before':[],
         'after':[]
     }
+    spe_subdir = spe_subdir if spe_subdir is not None else os.listdir(input_dir) 
+    print(spe_subdir)
     for subdir in os.scandir(input_dir):
-    # if subdir.name == 'CT3':
-        item_list = [case.path for case in os.scandir(subdir.path)]
-        # print(item_list)
-        for index, item in tqdm(enumerate(item_list)):
-            new_name = os.path.join(subdir.path, f'{subdir.name}_{index}')
-            modify_dict['before'].append(item)
-            modify_dict['after'].append(new_name)
-            # print(item,new_name)
-            os.rename(item,new_name)
+        if subdir.name in spe_subdir:
+            item_list = [case.path for case in os.scandir(subdir.path)]
+            # print(item_list)
+            for index, item in tqdm(enumerate(item_list)):
+                new_name = os.path.join(subdir.path, f'{subdir.name}_{index}')
+                modify_dict['before'].append(item)
+                modify_dict['after'].append(new_name)
+                # print(item,new_name)
+                os.rename(item,new_name)
     df = pd.DataFrame(data=modify_dict)
     print(df)
     df.to_csv('./modify.csv',mode='a',index=False)
@@ -30,7 +32,7 @@ def modify_file_name(input_dir):
 
 
 
-def dcm_to_nii(input_dir,save_dir):
+def dcm_to_nii(input_dir,save_dir,spe_subdir=None):
     '''subdir structure like:
     --CT0
       --CT0_1
@@ -48,36 +50,64 @@ def dcm_to_nii(input_dir,save_dir):
     #     # Get list of DICOM files
     #     dcm_files = [os.path.join(dcm_dir, f) for f in os.listdir(dcm_dir)]
     #     meta_data = [pydicom.read_file(dcm,force=True) for dcm in dcm_files]
-    #     for i in range(len(meta_data)):
-    #         meta_data[i].file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+    #     # for i in range(len(meta_data)):
+    #     #     meta_data[i].file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
     #     meta_data.sort(key=lambda x: float(x.ImagePositionPatient[2]))
-    #     images = np.stack([s.pixel_array for s in meta_data],axis=0).astype(np.float32)
+    #     # images = np.stack([s.pixel_array for s in meta_data],axis=0).astype(np.float32)
+    #     pixel_array = []
+    #     for s in meta_data:
+    #         try:
+    #             pixel_array.append(s.pixel_array)
+    #         except:
+    #             continue
+    #     images = np.stack(pixel_array,axis=0).astype(np.float32)
     #     # print(images.shape)
-    #     nifti_data = nib.Nifti1Image(images, np.eye(4))
     #     # # Save NIfTI file
+    #     nifti_data = nib.Nifti1Image(images, np.eye(4))
     #     nib.save(nifti_data, nii_file)
 
-
-    if os.path.exists(save_dir):
-        shutil.rmtree(save_dir)
+    def get_dcm_dir(folder_path):
+        entries = os.listdir(folder_path)
+        # if not entries:
+        #     print(folder_path)
+        #     raise ValueError("文件夹为空")
+        if entries:
+            first_item_path = os.path.join(folder_path, entries[0])
+            # print(first_item_path)
+            if os.path.isdir(first_item_path):
+                return first_item_path
+            else:
+                return folder_path
+        else:
+            print(f'{folder_path} is empty')
+            return folder_path
+        
+    # if os.path.exists(save_dir):
+    #     shutil.rmtree(save_dir)
     os.makedirs(save_dir)
 
     dcm_path = []
     nii_path = []
+    spe_subdir = spe_subdir if spe_subdir is not None else os.listdir(input_dir) 
     for subdir in os.scandir(input_dir):
-        if subdir.name == 'CT3':
+        if subdir.name in spe_subdir:
             for item in os.scandir(subdir.path):
-                dcm_path.append(item.path)
+                # print(item.path)
+                dim_dir = get_dcm_dir(item.path)
+                # if dim_dir is not None:
+                dcm_path.append(dim_dir)
                 nii_path.append(os.path.join(save_dir,f'{item.name}.nii.gz'))
-    error_data =[]
+    error_data = []
     for dcm_path, nii_path in tqdm(zip(dcm_path,nii_path)):
-        # print(dcm_path,nii_path)
+        print(dcm_path,nii_path)
+        # convert_to_nii(dcm_path,nii_path)
         try:
             convert_to_nii(dcm_path,nii_path)
         except:
             error_data.append(dcm_path)
         
-    print(error_data)
+    for case in error_data:
+        print(case)
 
 
 def get_data_attr(input_dir,save_csv):
@@ -97,6 +127,7 @@ def get_data_attr(input_dir,save_csv):
         info_item = [os.path.basename(item)]
         info_item.extend(read_nii_file(item))
         info.append(info_item)
+    # print(info)
     col = ['filename', 'size', 'slices', 'thickness', 'pixel_spacing']
     info_data = pd.DataFrame(columns=col, data=info)
     info_data.to_csv(save_csv, mode='a', index=False)
@@ -109,22 +140,20 @@ if __name__ == "__main__":
     ## step1: modify the dir name to anonymize
     # input_dir = '../dataset/raw_data/dcm_file/BHD'
     # input_dir = '../dataset/raw_data/dcm_file/non-BHD'
-    # modify_file_name(input_dir)
-
-    # input_dir = '../dataset/raw_data/dcm_file/BHD'
-    # modify_file_name(input_dir)
+    # modify_file_name(input_dir,['SS2'])
 
     ## step 2: convert dcm series to nii for data desensitization
-    input_dir = '../dataset/raw_data/dcm_file/BHD'
-    save_dir = '../dataset/raw_data/nii_file/BHD-miss'
-    # input_dir = '../dataset/raw_data/dcm_file/non-BHD'
-    # save_dir = '../dataset/raw_data/nii_file/non-BHD'
+    # input_dir = '../dataset/raw_data/dcm_file/BHD'
+    # save_dir = '../dataset/raw_data/nii_file/BHD2-miss'
+    input_dir = '../dataset/raw_data/dcm_file/non-BHD'
+    save_dir = '../dataset/raw_data/nii_file/non-BHD2-miss'
 
-    dcm_to_nii(input_dir,save_dir)
+    dcm_to_nii(input_dir,save_dir,['SS2'])
 
     ## step 3: get the attrs of nii data
-    # input_dir = '../dataset/raw_data/nii_file/BHD'
-    # input_dir = '../dataset/raw_data/nii_file/non-BHD'
+    # input_dir = '../dataset/raw_data/nii_file/BHD2'
+    # input_dir = '../dataset/raw_data/nii_file/non-BHD2'
+    # input_dir = '../dataset/raw_data/nii_file/BHD-miss-v2'
     # save_csv = './data_attr.csv'
 
     # get_data_attr(input_dir,save_csv)

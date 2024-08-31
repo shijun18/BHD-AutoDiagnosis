@@ -2,7 +2,25 @@ import shutil
 import os
 import pandas as pd
 import h5py
+import numpy as np
 
+def compute_specificity(y_true: np.array, y_pred: np.array, classes: set = None):
+
+    if classes is None: # Determine classes from the values
+        classes = set(np.concatenate((np.unique(y_true), np.unique(y_pred))))
+
+    specs = []
+    for cls in classes:
+        y_true_cls = (y_true == cls).astype(int)
+        y_pred_cls = (y_pred == cls).astype(int)
+
+        fp = sum(y_pred_cls[y_true_cls != 1])
+        tn = sum(y_pred_cls[y_true_cls == 0] == False)
+
+        specificity_val = tn / (tn + fp)
+        specs.append(specificity_val)
+
+    return specs
 
 def save_as_hdf5(data, save_path, key):
     hdf5_file = h5py.File(save_path, 'a')
@@ -82,6 +100,12 @@ def dfs_remove_weight(ckpt_path,retain=5):
         else:
             remove_weight_path(ckpt_path,retain=retain)
             break  
+
+
+def print_dict_items(dict_data):
+    max_key_length = max(len(key) for key in dict_data)
+    for key, value in dict_data.items():
+        print(f'{key.ljust(max_key_length)}: {value}')
 
 
 if __name__ == '__main__':
